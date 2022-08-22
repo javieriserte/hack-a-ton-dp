@@ -20,12 +20,6 @@ The purpose of this project is to create **pytorch** datasets for the **Disorder
         /references -> contains the references (targets) in fasta-like format
         /splits     -> contains the splits of the datasets in train and test (uniprot and disprot id)
         /features
-            /a3m    -> results of hhblits - not used
-            /hhm    -> results of hhblits on uniclust30
-            /hhr    -> results of hhblits - not used
-            /hsa2   -> results of SPIDER2 - not used
-            /hsb2   -> results of SPIDER2 - not used
-            /spd3   -> results of SPIDER2
             /pssm   -> results of PSI-BLAST on uniref50
     /dataset        -> contains python code to create the datasets for Pytorch
             disprot_dataset.py -> Contains the code for the creation of the two datasets (disorder and linker)
@@ -35,7 +29,7 @@ The purpose of this project is to create **pytorch** datasets for the **Disorder
     crate_references.py  -> contains the code to create the references in fasta-like format
     create_train_test.py -> contains the code to run CD-HIT and to create the splits in train and test (uniprot and disprot id) 
     parse_features.py    -> contains the code to parse the features (hhblits, spider2, psi-blast) - not used for now
-    test.py              -> contains the code to test the datasets
+    main.py              -> contains the code to create the network model, train the model and test the model
 
 ## What has been already done
 
@@ -51,6 +45,4 @@ Regarding the DataLoader (or rather Dataset) for PyTorch the following things ha
 
 - The basic data (sequence and target) are loaded from the previously created json
 - The sequence is transformed by encoding into an integer tensor (pytorch does not support strings), this can already be used as a feature if desired
-- Also a parameter can be passed to load the PSSM feature to have a total of 21 features for each residual (one to identify the residual and 20 of PSSM)
-- Passing the boolean parameter 'train' you choose whether to load the train or the test set as defined above.
-- I have included a small example of using the Dataset - DataLoader combination
+- Also, a parameter can be passed to load the PSSM feature to have a total of 21 features for each residue (one to identify the residual and 20 of PSSM)

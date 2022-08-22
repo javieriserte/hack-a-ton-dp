@@ -1,6 +1,8 @@
+import os
 from typing import List
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
@@ -8,9 +10,8 @@ from sklearn import metrics
 from torch import optim
 from torch.utils.data import DataLoader
 
-from dataset.disprot_dataset import DisorderDataset, Sequence, collate_fn
-from dataset.encoding import Uniprot21
-from dataset.utils import PadRight, read_pssm
+from dataset.disprot_dataset import DisprotDataset, Sequence, collate_fn
+from dataset.utils import PadRight
 
 
 class Net(nn.Module):
@@ -52,7 +53,7 @@ def trim_padding_and_flat(sequences: List[Sequence], pred):
     all_target = np.array([])
     all_trimmed_pred = np.array([])
     for i, seq in enumerate(sequences):
-        tmp_pred = pred[i][:len(seq)].detach().numpy()
+        tmp_pred = pred[i][:len(seq)].cpu().detach().numpy()
         all_target = np.concatenate([all_target, seq.clean_target])
         all_trimmed_pred = np.concatenate([all_trimmed_pred, tmp_pred])
     return all_target, all_trimmed_pred
@@ -130,11 +131,11 @@ def train(model, train_loader, optimizer, criterion, device, epoch):
     losses = np.array([])
     for batch_idx, (_, data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
         running_loss += loss.item() * data.size(0)
         losses = np.append(losses, [loss.item()])
         if batch_idx % 10 == 0:
@@ -164,33 +165,46 @@ def test(model, test_loader, criterion, device):
 
 def predict_one_sequence(model, sequence: Sequence, device):
     model.eval()
-    sequence = sequence.data.reshape(1, 4000, -1).to(device)
-    output = model(sequence)
+    data = sequence.data.reshape(1, n_features, -1).to(device)
+    output = model(data)
     _, output = trim_padding_and_flat([sequence], output)
     return output
 
 
 if __name__ == '__main__':
     use_pssm = True
-    train_epochs = 10
+    n_features = 21 if use_pssm else 1
+    train_epochs = 100
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # Performance tuning
+    torch.multiprocessing.set_sharing_strategy('file_system')
+    torch.backends.cudnn.benchmark = True
+    ######
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
 
-    # Defining the dataset and the dataloader for the training set and the test set
-    train_disorder = DisorderDataset(dataset_root='data/dataset', feature_root='data/features', train=True,
-                                     pssm=use_pssm, transform=PadRight(4000), target_transform=PadRight(4000))
-    test_disorder = DisorderDataset(dataset_root='data/dataset', feature_root='data/features', train=False,
+    # Load the data
+    train_data = pd.read_json(os.path.join("data/dataset/disorder_train.json"), orient='records', dtype=False)
+    test_data = pd.read_json(os.path.join("data/dataset/disorder_test.json"), orient='records', dtype=False)
+    # Defining the dataset
+    train_disorder = DisprotDataset(data=train_data, feature_root='data/features',
                                     pssm=use_pssm, transform=PadRight(4000), target_transform=PadRight(4000))
-
-    train_loader = DataLoader(train_disorder, batch_size=15, shuffle=True, num_workers=0, collate_fn=collate_fn)
-    test_loader = DataLoader(test_disorder, batch_size=15, shuffle=True, num_workers=0, collate_fn=collate_fn)
+    test_disorder = DisprotDataset(data=test_data, feature_root='data/features',
+                                   pssm=use_pssm, transform=PadRight(4000), target_transform=PadRight(4000))
+    # Defining the dataloader for the training set and the test set
+    train_loader = DataLoader(train_disorder, batch_size=80, shuffle=True, num_workers=8, collate_fn=collate_fn,
+                              pin_memory=True)
+    test_loader = DataLoader(test_disorder, batch_size=80, shuffle=True, num_workers=8, collate_fn=collate_fn,
+                             pin_memory=True)
 
     # Instantiate the model
-    net = Net(4000, 21 if use_pssm else 1, 4000).to(device)
+    net = Net(4000, n_features, 4000)
+    model = nn.DataParallel(net).to(device)
+
     # Define the loss function and the optimizer
     criterion = nn.MSELoss(reduction='sum')
-    optimizer = optim.Adam(net.parameters(), lr=0.001)
+    optimizer = optim.Adam(net.parameters(), lr=0.000005)
 
     all_train_loss, all_test_loss, all_test_aucs = np.array([]), np.array([]), np.array([])
     for epoch in range(train_epochs):
@@ -201,10 +215,13 @@ if __name__ == '__main__':
         all_test_loss = np.append(all_test_loss, [test_loss])
         all_test_aucs = np.append(all_test_aucs, [test_auc])
 
-        plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
+        if epoch % 10 == 0:
+            plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
 
     plot_roc_curve(net, test_loader, device)
+    plot_roc_curve(net, train_loader, device, set='Train')
 
     sequence: Sequence = test_disorder[0]
     prediction = predict_one_sequence(net, sequence, device)
-    print(sequence.sequence, prediction)
+    for idx, (aa, pred) in enumerate(zip(sequence.sequence, prediction)):
+        print(f'{idx + 1:3d}\t{aa}\t{pred:.3f}')

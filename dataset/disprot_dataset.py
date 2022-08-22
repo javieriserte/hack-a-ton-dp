@@ -66,25 +66,18 @@ class Sequence:
 
 # Base class for the two datasets, with common functionality
 class DisprotDataset(Dataset):
-    def __init__(self, dataset_root='../data/dataset', feature_root='../data/features', train_file=None, test_file=None,
-                 train=True, transform=None, target_transform=None, pssm=False):
+    def __init__(self, data, feature_root='../data/features', transform=None, target_transform=None, pssm=False):
         # Define the encoder fot the sequence
         self.encoder = Uniprot21()
-
-        self.train = train
 
         self.transform = transform
         self.target_transform = target_transform
 
-        if self.train:
-            self.raw_data = pd.read_json(os.path.join(dataset_root, train_file), orient='records', dtype=False)
-        else:
-            self.raw_data = pd.read_json(os.path.join(dataset_root, test_file), orient='records', dtype=False)
+        self.raw_data = data
 
         # Create sequences objects
         self.data = []
-        split = 'train' if self.train else 'test'
-        for seq_id, sequence, target in tqdm(self.raw_data.itertuples(index=False), desc=f'Importing {split} sequences',
+        for seq_id, sequence, target in tqdm(self.raw_data.itertuples(index=False), desc=f'Importing sequences',
                                              total=len(self.raw_data)):
             # Split the sequence with a moving window of size 20, add padding at the end
             self.data.append(Sequence(seq_id, sequence, target, load_pssm=pssm, pssm_path=feature_root,
@@ -97,38 +90,8 @@ class DisprotDataset(Dataset):
         return self.data[idx]
 
 
-class DisorderDataset(DisprotDataset):
-    def __init__(self, dataset_root='../data/dataset', feature_root='../data/features', train=True, transform=None,
-                 target_transform=None, pssm=False):
-        super(DisorderDataset, self).__init__(dataset_root=dataset_root, feature_root=feature_root,
-                                              train=train, transform=transform,
-                                              target_transform=target_transform, pssm=pssm,
-                                              train_file='disorder_train.json',
-                                              test_file='disorder_test.json', )
-
-
-class LinkerDataset(DisprotDataset):
-    def __init__(self, dataset_root='../data/dataset', feature_root='../data/features', train=True, transform=None,
-                 target_transform=None, pssm=False):
-        super(LinkerDataset, self).__init__(dataset_root=dataset_root, feature_root=feature_root,
-                                            train=train, transform=transform,
-                                            target_transform=target_transform, pssm=pssm,
-                                            train_file='linker_train.json',
-                                            test_file='linker_test.json', )
-
-
 def collate_fn(batch: List[Sequence]):
     data = torch.stack([item.data for item in batch])
     target = torch.stack([item.target for item in batch])
     return batch, data, target
 
-
-if __name__ == '__main__':
-    # Disorder Dataset
-    train_disorder = DisorderDataset(train=True, pssm=False)
-    test_disorder = DisorderDataset(train=False, pssm=False)
-
-    disorder_dataloader = DataLoader(test_disorder, batch_size=1, shuffle=False, num_workers=0)
-
-    for i_batch, (X, y) in enumerate(disorder_dataloader):
-        print("Features:", X, "Target:", y)
