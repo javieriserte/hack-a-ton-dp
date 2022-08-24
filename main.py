@@ -11,7 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from dataset.disprot_dataset import DisprotDataset, Sequence, collate_fn
-from dataset.utils import PadRight
+from dataset.utils import PadRightTo
 
 
 class Net(nn.Module):
@@ -22,17 +22,10 @@ class Net(nn.Module):
             return (length_in + 2 * layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1) - 1) // \
                    layer.stride[0] + 1
 
-        self.conv1 = nn.Conv1d(in_features, 5, kernel_size=20, stride=5, padding=0)
-        conv1_out = conv_out_len(self.conv1, in_size)
-        self.conv2 = nn.Conv1d(self.conv1.out_channels, 3, kernel_size=20, stride=5, padding=0)
-
-        conv2_out = conv_out_len(self.conv2, conv1_out)
-
-        self.fc1 = nn.Linear(conv2_out * self.conv2.out_channels, 512)
-        self.droupout = nn.Dropout(0.2)
-        self.fc2 = nn.Linear(512, 1024)
-        self.fc3 = nn.Linear(1024, 2048)
-        self.fc4 = nn.Linear(2048, out_size)
+        self.conv1 = nn.Conv1d(in_features, 50, kernel_size=21, stride=1, padding=10)
+        self.conv2 = nn.Conv1d(self.conv1.out_channels, 30, kernel_size=11, stride=1, padding=5)
+        self.conv3 = nn.Conv1d(self.conv2.out_channels, 20, kernel_size=7, stride=1, padding=3)
+        self.conv4 = nn.Conv1d(self.conv3.out_channels, 1, kernel_size=1, stride=1, padding=0)
 
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
@@ -40,12 +33,9 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
-        x = torch.flatten(x, 1)
-        x = self.relu(self.fc1(x))
-        x = self.droupout(x)
-        x = self.relu(self.fc2(x))
-        x = self.relu(self.fc3(x))
-        x = self.sigmoid(self.fc4(x))
+        x = self.relu(self.conv3(x))
+        x = self.sigmoid(self.conv4(x))
+        x = x.flatten(start_dim=1)
         return x
 
 
@@ -71,11 +61,13 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     fig, ax1 = plt.subplots(figsize=(8.5, 7.5))
 
     x_test = np.arange(1, epoch + 2)
+    train_losses = train_losses.reshape(-1, 4).mean(axis=1)
     x_train = np.linspace(0, epoch + 1, len(train_losses))
 
     ax1.plot(x_train, train_losses, color='slategrey', linewidth=1, label='Train Loss')
     ax1.plot(x_test, test_losses, color='dodgerblue', marker='o', linewidth=2, label='Test Loss')
-    ax1.set_xticks(np.arange(0, epoch + 2))
+    max_ticks = 22
+    ax1.set_xticks(np.linspace(0, epoch + 2, max_ticks, dtype=int))
     ax1.tick_params(axis='y', color='slategrey', labelcolor='slategrey')
     ax1.set_ylabel('Loss')
     ax1.set_xlabel('Epoch')
@@ -84,9 +76,11 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     ax2 = ax1.twinx()
     ax2.plot(x_test, test_aucs, color='orange', marker='o', linewidth=2, label='Test AUC')
     ax2.tick_params(axis='y', color='orange', labelcolor='orange')
+    ax2.set_yticks(np.linspace(0, 1, 11))
     ax2.set_ylabel('AUC')
     # Set the minimum y-axis value to 0.0 and maximum y-axis value to 1.0 (AUC is between 0.0 and 1.0)
     ax2.set_ylim(0.0, 1.0)
+    ax2.grid(True, which='major', axis='y', linestyle='dotted')
 
     plt.title(title)
     fig.legend(ncol=1, bbox_to_anchor=(0, 0, 1, 1), bbox_transform=ax1.transAxes)
@@ -125,14 +119,27 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
     plt.show()
 
 
+# To get the loss we cut the output and target to the length of the sequence, removing the padding.
+# This helps the network to focus on the actual sequence and not the padding.
+def get_loss(sequences, output, criterion) -> torch.Tensor:
+    loss = 0.0
+    # Cycle through the sequences and accumulate the loss, removing the padding
+    for i, seq in enumerate(sequences):
+        seq_loss = criterion(output[i][:len(seq)], torch.tensor(seq.clean_target, device=device, dtype=torch.float))
+        loss += seq_loss
+    # Return the average loss over the sequences of the batch
+    return loss / len(sequences)
+
+
 def train(model, train_loader, optimizer, criterion, device, epoch):
     model.train()
+    optimizer.zero_grad(set_to_none=True)
     running_loss = 0.0
     losses = np.array([])
-    for batch_idx, (_, data, target) in enumerate(train_loader):
+    for batch_idx, (sequences, data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         output = model(data)
-        loss = criterion(output, target)
+        loss = get_loss(sequences, output, criterion)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
@@ -155,9 +162,9 @@ def test(model, test_loader, criterion, device):
         for sequences, data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += criterion(output, target).item() * data.size(0)
+            test_loss += get_loss(sequences, output, criterion).cpu()
             test_auc += batch_auc(sequences, output) * data.size(0)
-    test_loss /= len(test_loader.dataset)
+    test_loss /= len(test_loader)
     test_auc /= len(test_loader.dataset)
     print('\nTest set: Average loss: {:.4f}, AUC: {:.4f}\n'.format(test_loss, test_auc))
     return test_loss, test_auc
@@ -189,21 +196,23 @@ if __name__ == '__main__':
     test_data = pd.read_json(os.path.join("data/dataset/disorder_test.json"), orient='records', dtype=False)
     # Defining the dataset
     train_disorder = DisprotDataset(data=train_data, feature_root='data/features',
-                                    pssm=use_pssm, transform=PadRight(4000), target_transform=PadRight(4000))
+                                    pssm=use_pssm, transform=PadRightTo(4000), target_transform=PadRightTo(4000))
     test_disorder = DisprotDataset(data=test_data, feature_root='data/features',
-                                   pssm=use_pssm, transform=PadRight(4000), target_transform=PadRight(4000))
+                                   pssm=use_pssm, transform=PadRightTo(4000), target_transform=PadRightTo(4000))
     # Defining the dataloader for the training set and the test set
-    train_loader = DataLoader(train_disorder, batch_size=80, shuffle=True, num_workers=8, collate_fn=collate_fn,
+    train_loader = DataLoader(train_disorder, batch_size=50, shuffle=True, num_workers=8, collate_fn=collate_fn,
                               pin_memory=True)
-    test_loader = DataLoader(test_disorder, batch_size=80, shuffle=True, num_workers=8, collate_fn=collate_fn,
+    test_loader = DataLoader(test_disorder, batch_size=50, shuffle=True, num_workers=8, collate_fn=collate_fn,
                              pin_memory=True)
 
     # Instantiate the model
-    net = Net(4000, n_features, 4000)
-    model = nn.DataParallel(net).to(device)
+    net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
+    # net = nn.DataParallel(net).to(device)
 
     # Define the loss function and the optimizer
-    criterion = nn.MSELoss(reduction='sum')
+    criterion = nn.MSELoss(reduction='mean')
+
+    # optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     optimizer = optim.Adam(net.parameters(), lr=0.000005)
 
     all_train_loss, all_test_loss, all_test_aucs = np.array([]), np.array([]), np.array([])

@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 
 
-class PadRight(object):
+class PadRightTo(object):
     """Pad the tensor to a given size.
 
     Args:
