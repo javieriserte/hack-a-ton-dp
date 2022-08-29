@@ -8,6 +8,7 @@ The purpose of this project is to create **pytorch** datasets for the **Disorder
 * **pytorch**
 * **torchvision**
 * **pandas**
+* **matplotlib**
 * **numpy**
 * **biopython**
 * **tqdm**
