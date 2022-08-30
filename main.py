@@ -56,7 +56,7 @@ def batch_auc(sequences: List[Sequence], pred):
     return auc
 
 
-def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC and Loss"):
+def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC and Loss", output_file="default_auc_output"):
     plt.close('all')
     fig, ax1 = plt.subplots(figsize=(8.5, 7.5))
 
@@ -86,11 +86,12 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     fig.legend(ncol=1, bbox_to_anchor=(0, 0, 1, 1), bbox_transform=ax1.transAxes)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"{output_file}.png")
+    #plt.show()
 
 
 # Function that get the results from the model on the test set and plot the ROC curve
-def plot_roc_curve(model, data_loader, device, set='Test'):
+def plot_roc_curve(model, data_loader, device, set='Test', outfile="default_roc_curve"):
     model.eval()
     all_output, all_target = np.array([]), np.array([])
     with torch.no_grad():
@@ -116,7 +117,8 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
     ax.set_ylabel("TPR")
     plt.legend(loc='lower right')
     plt.title(f'ROC Curve for {set} Set')
-    plt.show()
+    plt.savefig(f"{outfile}.png")
+    #plt.show()
 
 
 # To get the loss we cut the output and target to the length of the sequence, removing the padding.
@@ -181,7 +183,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 if __name__ == '__main__':
     use_pssm = True
     n_features = 21 if use_pssm else 1
-    train_epochs = 100
+    train_epochs = 50
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
@@ -225,10 +227,10 @@ if __name__ == '__main__':
         all_test_aucs = np.append(all_test_aucs, [test_auc])
 
         if epoch % 10 == 0:
-            plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
+            plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch, output_file=f"epoch{epoch}_auc_and_loss")
 
-    plot_roc_curve(net, test_loader, device)
-    plot_roc_curve(net, train_loader, device, set='Train')
+    plot_roc_curve(net, test_loader, device, outfile="roc_curve_base")
+    plot_roc_curve(net, train_loader, device, set='Train', outfile="roc_curve_train_base")
 
     sequence: Sequence = test_disorder[0]
     prediction = predict_one_sequence(net, sequence, device)
