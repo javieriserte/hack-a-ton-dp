@@ -168,7 +168,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 
 
 if __name__ == '__main__':
-    use_pssm = True
+    use_pssm = False
     n_features = 21 if use_pssm else 1
     train_epochs = 100
 
@@ -196,7 +196,7 @@ if __name__ == '__main__':
 
     # Instantiate the model
     net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
-    # net = nn.DataParallel(net).to(device)
+    net = nn.DataParallel(net).to(device)
 
     # Define the loss function and the optimizer
     criterion = nn.MSELoss(reduction='mean').cuda()
