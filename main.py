@@ -31,6 +31,16 @@ def batch_auc(sequences: List[Sequence], pred):
     auc = metrics.auc(fpr, tpr)
     return auc
 
+def save_auc_and_loss(train_losses, test_losses, test_aucs, epoch, outfile, outfile_train):
+    x_test = np.arange(1, epoch + 2)
+    train_losses = train_losses.reshape(-1, 4).mean(axis=1)
+    x_train = np.linspace(0, epoch + 1, len(train_losses))
+    with open(outfile,'w') as outfmt:
+        for i in range(len(x_test)):
+            outfmt.write(f"{x_test[i]}\t{test_losses[i]}\t{test_aucs[i]}\n")
+    with open(outfile_train, 'w') as outfmt:
+        for i in range(len(x_train)):
+            outfmt.write("f{x_train[i]}\t{train_losses[i]}\n")
 
 def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC and Loss"):
     plt.close('all')
@@ -160,7 +170,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 if __name__ == '__main__':
     use_pssm = True
     n_features = 21 if use_pssm else 1
-    train_epochs = 5
+    train_epochs = 50
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
@@ -218,7 +228,14 @@ if __name__ == '__main__':
     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
     plot_roc_curve(net, test_loader, device)
     plot_roc_curve(net, train_loader, device, set='Train')
-
+    save_auc_and_loss(
+        all_train_loss,
+        all_test_loss,
+        all_test_aucs,
+        epoch,
+        "loss_and_auc_data.txt",
+        "train_loss_and_auc_data.txt"
+    )
     # sequence: Sequence = test_disorder[0]
     # prediction = predict_one_sequence(net, sequence, device)
     # for idx, (aa, pred) in enumerate(zip(sequence.sequence, prediction)):
