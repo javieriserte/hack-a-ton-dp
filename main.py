@@ -9,35 +9,11 @@ from matplotlib import pyplot as plt
 from sklearn import metrics
 from torch import optim
 from torch.utils.data import DataLoader
+import timeit
 
 from dataset.disprot_dataset import DisprotDataset, Sequence, collate_fn
 from dataset.utils import PadRightTo
-
-
-class Net(nn.Module):
-    def __init__(self, in_size, in_features, out_size):
-        super().__init__()
-
-        def conv_out_len(layer, length_in):
-            return (length_in + 2 * layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1) - 1) // \
-                   layer.stride[0] + 1
-
-        self.conv1 = nn.Conv1d(in_features, 50, kernel_size=21, stride=1, padding=10)
-        self.conv2 = nn.Conv1d(self.conv1.out_channels, 30, kernel_size=11, stride=1, padding=5)
-        self.conv3 = nn.Conv1d(self.conv2.out_channels, 20, kernel_size=7, stride=1, padding=3)
-        self.conv4 = nn.Conv1d(self.conv3.out_channels, 1, kernel_size=1, stride=1, padding=0)
-
-        self.sigmoid = nn.Sigmoid()
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        x = self.relu(self.conv1(x))
-        x = self.relu(self.conv2(x))
-        x = self.relu(self.conv3(x))
-        x = self.sigmoid(self.conv4(x))
-        x = x.flatten(start_dim=1)
-        return x
-
+from net import Net
 
 def trim_padding_and_flat(sequences: List[Sequence], pred):
     all_target = np.array([])
@@ -86,7 +62,7 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     fig.legend(ncol=1, bbox_to_anchor=(0, 0, 1, 1), bbox_transform=ax1.transAxes)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig('AUC_and_LOSS.png')
 
 
 # Function that get the results from the model on the test set and plot the ROC curve
@@ -116,7 +92,7 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
     ax.set_ylabel("TPR")
     plt.legend(loc='lower right')
     plt.title(f'ROC Curve for {set} Set')
-    plt.show()
+    plt.savefig(f"ROC_CURVE_{set}.png")
 
 
 # To get the loss we cut the output and target to the length of the sequence, removing the padding.
@@ -130,12 +106,16 @@ def get_loss(sequences, output, criterion) -> torch.Tensor:
     # Return the average loss over the sequences of the batch
     return loss / len(sequences)
 
-
 def train(model, train_loader, optimizer, criterion, device, epoch):
+    t0 = timeit.default_timer()
     model.train()
+    t1 = timeit.default_timer()
     optimizer.zero_grad(set_to_none=True)
     running_loss = 0.0
+    t2 = timeit.default_timer()
     losses = np.array([])
+    print(f"    Train: {t1 - t0}")
+    print(f"    Zero grad: {t2 - t1}")
     for batch_idx, (sequences, data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         output = model(data)
@@ -146,10 +126,9 @@ def train(model, train_loader, optimizer, criterion, device, epoch):
         running_loss += loss.item() * data.size(0)
         losses = np.append(losses, [loss.item()])
         if batch_idx % 10 == 0:
-            print('Train Epoch: {} [{:4d}/{} ({:2.0f}%)] Loss: {:.3f}'.format(
+            print('    Train Epoch: {} [{:4d}/{} ({:2.0f}%)] Loss: {:.3f}'.format(
                     epoch + 1, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item()))
-
     epoch_loss = running_loss / len(train_loader.dataset)
     return epoch_loss, losses
 
@@ -166,7 +145,7 @@ def test(model, test_loader, criterion, device):
             test_auc += batch_auc(sequences, output) * data.size(0)
     test_loss /= len(test_loader)
     test_auc /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, AUC: {:.4f}\n'.format(test_loss, test_auc))
+    print('    Test set: Average loss: {:.4f}, AUC: {:.4f}\n'.format(test_loss, test_auc))
     return test_loss, test_auc
 
 
@@ -181,7 +160,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 if __name__ == '__main__':
     use_pssm = True
     n_features = 21 if use_pssm else 1
-    train_epochs = 100
+    train_epochs = 5
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
@@ -200,37 +179,47 @@ if __name__ == '__main__':
     test_disorder = DisprotDataset(data=test_data, feature_root='data/features',
                                    pssm=use_pssm, transform=PadRightTo(4000), target_transform=PadRightTo(4000))
     # Defining the dataloader for the training set and the test set
-    train_loader = DataLoader(train_disorder, batch_size=50, shuffle=True, num_workers=8, collate_fn=collate_fn,
-                              pin_memory=True)
-    test_loader = DataLoader(test_disorder, batch_size=50, shuffle=True, num_workers=8, collate_fn=collate_fn,
-                             pin_memory=True)
+    train_loader = DataLoader(train_disorder, batch_size=50, shuffle=True, num_workers=2, collate_fn=collate_fn,
+                              pin_memory=True, pin_memory_device=device.type)
+    test_loader = DataLoader(test_disorder, batch_size=50, shuffle=True, num_workers=2, collate_fn=collate_fn,
+                             pin_memory=True, pin_memory_device=device.type)
 
     # Instantiate the model
     net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
     # net = nn.DataParallel(net).to(device)
 
     # Define the loss function and the optimizer
-    criterion = nn.MSELoss(reduction='mean')
+    criterion = nn.MSELoss(reduction='mean').cuda()
 
     # optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     optimizer = optim.Adam(net.parameters(), lr=0.000005)
 
     all_train_loss, all_test_loss, all_test_aucs = np.array([]), np.array([]), np.array([])
     for epoch in range(train_epochs):
+        print(f"Epoch {epoch+1}")
+        t0 = timeit.default_timer()
         _, losses = train(net, train_loader, optimizer, criterion, device, epoch)
+        t1 = timeit.default_timer()
+        print(f"  Train time: {t1-t0}")
         all_train_loss = np.concatenate((all_train_loss, losses))
-
+        t2 = timeit.default_timer()
+        print(f"  Concat: {t2-t1}")
         test_loss, test_auc = test(net, test_loader, criterion, device)
+        t3 = timeit.default_timer()
+        print(f"  Test: {t3-t2}")
         all_test_loss = np.append(all_test_loss, [test_loss])
         all_test_aucs = np.append(all_test_aucs, [test_auc])
+        t4 = timeit.default_timer()
+        print(f"  Appends: {t4-t3}")
 
-        if epoch % 10 == 0:
-            plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
+        # if epoch % 10 == 0:
+        #     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
 
+    plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
     plot_roc_curve(net, test_loader, device)
     plot_roc_curve(net, train_loader, device, set='Train')
 
-    sequence: Sequence = test_disorder[0]
-    prediction = predict_one_sequence(net, sequence, device)
-    for idx, (aa, pred) in enumerate(zip(sequence.sequence, prediction)):
-        print(f'{idx + 1:3d}\t{aa}\t{pred:.3f}')
+    # sequence: Sequence = test_disorder[0]
+    # prediction = predict_one_sequence(net, sequence, device)
+    # for idx, (aa, pred) in enumerate(zip(sequence.sequence, prediction)):
+    #     print(f'{idx + 1:3d}\t{aa}\t{pred:.3f}')
