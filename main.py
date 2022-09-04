@@ -108,7 +108,10 @@ def get_loss(sequences, output, criterion, device) -> torch.Tensor:
     loss = 0.0
     # Cycle through the sequences and accumulate the loss, removing the padding
     for i, seq in enumerate(sequences):
-        seq_loss = criterion(output[i][:len(seq)], torch.tensor(seq.clean_target, device=device, dtype=torch.float))
+        seq_loss = criterion(
+            output[i][:len(seq)],
+            torch.tensor(seq.clean_target, device=device, dtype=torch.float)
+        )
         loss += seq_loss
     # Return the average loss over the sequences of the batch
     return loss / len(sequences)
@@ -187,15 +190,15 @@ if __name__ == '__main__':
         orient='records',
         dtype=False
     )
-    # test_data = pd.read_json(
-    #     os.path.join(
-    #         "data",
-    #         "dataset",
-    #         "test_similar.json"
-    #     ),
-    #     orient='records',
-    #     dtype=False
-    # )
+    test_data = pd.read_json(
+        os.path.join(
+            "data",
+            "dataset",
+            "disorder_test.json"
+        ),
+        orient='records',
+        dtype=False
+    )
     # Defining the dataset
     train_disorder = DisprotDataset(
         data=train_data,
@@ -204,13 +207,13 @@ if __name__ == '__main__':
         transform=PadRightTo(4000),
         target_transform=PadRightTo(4000)
     )
-    # test_disorder = DisprotDataset(
-    #     data=test_data,
-    #     feature_root='data/features',
-    #     pssm=use_pssm,
-    #     transform=PadRightTo(4000),
-    #     target_transform=PadRightTo(4000)
-    # )
+    test_disorder = DisprotDataset(
+        data=test_data,
+        feature_root='data/features',
+        pssm=use_pssm,
+        transform=PadRightTo(4000),
+        target_transform=PadRightTo(4000)
+    )
     # Defining the dataloader for the training set and the test set
     train_loader = DataLoader(
         train_disorder,
@@ -221,15 +224,15 @@ if __name__ == '__main__':
         pin_memory=True,
         pin_memory_device=device.type
     )
-    # test_loader = DataLoader(
-    #     test_disorder,
-    #     batch_size=50,
-    #     shuffle=True,
-    #     num_workers=2,
-    #     collate_fn=collate_fn,
-    #     pin_memory=True,
-    #     pin_memory_device=device.type
-    # )
+    test_loader = DataLoader(
+        test_disorder,
+        batch_size=50,
+        shuffle=True,
+        num_workers=2,
+        collate_fn=collate_fn,
+        pin_memory=True,
+        pin_memory_device=device.type
+    )
 
     # Instantiate the model
     net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
@@ -263,7 +266,7 @@ if __name__ == '__main__':
         #     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
 
     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
-    # plot_roc_curve(net, test_loader, device)
+    plot_roc_curve(net, test_loader, device)
     plot_roc_curve(net, train_loader, device, set='Train')
     save_auc_and_loss(
         all_train_loss,
