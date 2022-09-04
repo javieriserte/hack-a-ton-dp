@@ -40,16 +40,14 @@ def save_auc_and_loss(train_losses, test_losses, test_aucs, epoch, outfile, outf
             outfmt.write(f"{x_test[i]}\t{test_losses[i]}\t{test_aucs[i]}\n")
     with open(outfile_train, 'w') as outfmt:
         for i in range(len(x_train)):
-            outfmt.write("f{x_train[i]}\t{train_losses[i]}\n")
+            outfmt.write(f"{x_train[i]}\t{train_losses[i]}\n")
 
 def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC and Loss"):
     plt.close('all')
     fig, ax1 = plt.subplots(figsize=(8.5, 7.5))
-
     x_test = np.arange(1, epoch + 2)
     train_losses = train_losses.reshape(-1, 4).mean(axis=1)
     x_train = np.linspace(0, epoch + 1, len(train_losses))
-
     ax1.plot(x_train, train_losses, color='slategrey', linewidth=1, label='Train Loss')
     ax1.plot(x_test, test_losses, color='dodgerblue', marker='o', linewidth=2, label='Test Loss')
     max_ticks = 22
@@ -58,7 +56,6 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     ax1.set_ylabel('Loss')
     ax1.set_xlabel('Epoch')
     ax1.set_yscale('log')
-
     ax2 = ax1.twinx()
     ax2.plot(x_test, test_aucs, color='orange', marker='o', linewidth=2, label='Test AUC')
     ax2.tick_params(axis='y', color='orange', labelcolor='orange')
@@ -83,11 +80,9 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
         for sequences, data, target in data_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-
             target, output = trim_padding_and_flat(sequences, output)
             all_target = np.concatenate([all_target, target])
             all_output = np.concatenate([all_output, output])
-
     fpr, tpr, thresholds = metrics.roc_curve(all_target, all_output, pos_label=1)
     auc = metrics.auc(fpr, tpr)
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
@@ -181,18 +176,58 @@ if __name__ == '__main__':
     print('Using device:', device)
 
     # Load the data
-    train_data = pd.read_json(os.path.join("data/dataset/disorder_train.json"), orient='records', dtype=False)
-    test_data = pd.read_json(os.path.join("data/dataset/disorder_test.json"), orient='records', dtype=False)
+    train_data = pd.read_json(
+        os.path.join(
+            "data",
+            "dataset",
+            "disorder_train.json"
+        ),
+        orient='records',
+        dtype=False
+    )
+    test_data = pd.read_json(
+        os.path.join(
+            "data",
+            "dataset",
+            "test_similar.json"
+        ),
+        orient='records',
+        dtype=False
+    )
     # Defining the dataset
-    train_disorder = DisprotDataset(data=train_data, feature_root='data/features',
-                                    pssm=use_pssm, transform=PadRightTo(4000), target_transform=PadRightTo(4000))
-    test_disorder = DisprotDataset(data=test_data, feature_root='data/features',
-                                   pssm=use_pssm, transform=PadRightTo(4000), target_transform=PadRightTo(4000))
+    train_disorder = DisprotDataset(
+        data=train_data,
+        feature_root='data/features',
+        pssm=use_pssm,
+        transform=PadRightTo(4000),
+        target_transform=PadRightTo(4000)
+    )
+    test_disorder = DisprotDataset(
+        data=test_data,
+        feature_root='data/features',
+        pssm=use_pssm,
+        transform=PadRightTo(4000),
+        target_transform=PadRightTo(4000)
+    )
     # Defining the dataloader for the training set and the test set
-    train_loader = DataLoader(train_disorder, batch_size=50, shuffle=True, num_workers=2, collate_fn=collate_fn,
-                              pin_memory=True, pin_memory_device=device.type)
-    test_loader = DataLoader(test_disorder, batch_size=50, shuffle=True, num_workers=2, collate_fn=collate_fn,
-                             pin_memory=True, pin_memory_device=device.type)
+    train_loader = DataLoader(
+        train_disorder,
+        batch_size=50,
+        shuffle=True,
+        num_workers=2,
+        collate_fn=collate_fn,
+        pin_memory=True,
+        pin_memory_device=device.type
+    )
+    test_loader = DataLoader(
+        test_disorder,
+        batch_size=50,
+        shuffle=True,
+        num_workers=2,
+        collate_fn=collate_fn,
+        pin_memory=True,
+        pin_memory_device=device.type
+    )
 
     # Instantiate the model
     net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
