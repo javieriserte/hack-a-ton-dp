@@ -100,6 +100,7 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
     plt.legend(loc='lower right')
     plt.title(f'ROC Curve for {set} Set')
     plt.savefig(f"ROC_CURVE_{set}.png")
+    return auc
 
 
 # To get the loss we cut the output and target to the length of the sequence, removing the padding.
@@ -234,48 +235,57 @@ if __name__ == '__main__':
         pin_memory_device=device.type
     )
 
-    # Instantiate the model
-    net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
-    net = nn.DataParallel(net).to(device)
+    train_aucs = []
+    test_aucs = []
+    for rep in range(10):
+        # Instantiate the model
+        net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
+        net = nn.DataParallel(net).to(device)
 
-    # Define the loss function and the optimizer
-    criterion = nn.MSELoss(reduction='mean').cuda()
+        # Define the loss function and the optimizer
+        criterion = nn.MSELoss(reduction='mean').cuda()
 
-    # optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    optimizer = optim.Adam(net.parameters(), lr=0.000005)
+        # optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+        optimizer = optim.Adam(net.parameters(), lr=0.000005)
 
-    all_train_loss, all_test_loss, all_test_aucs = np.array([]), np.array([]), np.array([])
-    for epoch in range(train_epochs):
-        print(f"Epoch {epoch+1}")
-        t0 = timeit.default_timer()
-        _, losses = train(net, train_loader, optimizer, criterion, device, epoch)
-        t1 = timeit.default_timer()
-        print(f"  Train time: {t1-t0}")
-        all_train_loss = np.concatenate((all_train_loss, losses))
-        t2 = timeit.default_timer()
-        print(f"  Concat: {t2-t1}")
-        test_loss, test_auc = test(net, test_loader, criterion, device)
-        t3 = timeit.default_timer()
-        print(f"  Test: {t3-t2}")
-        all_test_loss = np.append(all_test_loss, [test_loss])
-        all_test_aucs = np.append(all_test_aucs, [test_auc])
-        t4 = timeit.default_timer()
-        print(f"  Appends: {t4-t3}")
+        all_train_loss, all_test_loss, all_test_aucs = np.array([]), np.array([]), np.array([])
+        for epoch in range(train_epochs):
+            print(f"Epoch {epoch+1}")
+            t0 = timeit.default_timer()
+            _, losses = train(net, train_loader, optimizer, criterion, device, epoch)
+            t1 = timeit.default_timer()
+            print(f"  Train time: {t1-t0}")
+            all_train_loss = np.concatenate((all_train_loss, losses))
+            t2 = timeit.default_timer()
+            print(f"  Concat: {t2-t1}")
+            test_loss, test_auc = test(net, test_loader, criterion, device)
+            t3 = timeit.default_timer()
+            print(f"  Test: {t3-t2}")
+            all_test_loss = np.append(all_test_loss, [test_loss])
+            all_test_aucs = np.append(all_test_aucs, [test_auc])
+            t4 = timeit.default_timer()
+            print(f"  Appends: {t4-t3}")
 
-        # if epoch % 10 == 0:
-        #     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
+            # if epoch % 10 == 0:
+            #     plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
 
-    plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
-    plot_roc_curve(net, test_loader, device)
-    plot_roc_curve(net, train_loader, device, set='Train')
-    save_auc_and_loss(
-        all_train_loss,
-        all_test_loss,
-        all_test_aucs,
-        epoch,
-        "loss_and_auc_data.txt",
-        "train_loss_and_auc_data.txt"
-    )
+        plot_auc_and_loss(all_train_loss, all_test_loss, all_test_aucs, epoch)
+        auc_test = plot_roc_curve(net, test_loader, device)
+        auc_train = plot_roc_curve(net, train_loader, device, set='Train')
+        save_auc_and_loss(
+            all_train_loss,
+            all_test_loss,
+            all_test_aucs,
+            epoch,
+            "loss_and_auc_data.txt",
+            "train_loss_and_auc_data.txt"
+        )
+        train_aucs.append(auc_train)
+        test_aucs.append(auc_test)
+
+    with open("auc_summary.txt", 'w', encoding='utf-8') as f_out:
+        for tr, te in zip(train_aucs, test_aucs):
+            f_out.write(f"{tr}\t{te}\n")
     # sequence: Sequence = test_disorder[0]
     # prediction = predict_one_sequence(net, sequence, device)
     # for idx, (aa, pred) in enumerate(zip(sequence.sequence, prediction)):
