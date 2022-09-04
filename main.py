@@ -1,4 +1,5 @@
 import os
+import random
 from typing import List
 
 import numpy as np
@@ -238,6 +239,15 @@ if __name__ == '__main__':
     train_aucs = []
     test_aucs = []
     for rep in range(10):
+        seed = int(timeit.default_timer())
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
         # Instantiate the model
         net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
         net = nn.DataParallel(net).to(device)
