@@ -1,3 +1,4 @@
+import gc
 import os
 import random
 from typing import List
@@ -292,6 +293,9 @@ if __name__ == '__main__':
         )
         train_aucs.append(auc_train)
         test_aucs.append(auc_test)
+        net = None
+        gc.collect()
+        torch.cuda.empty_cache()
 
     with open("auc_summary.txt", 'w', encoding='utf-8') as f_out:
         for tr, te in zip(train_aucs, test_aucs):
