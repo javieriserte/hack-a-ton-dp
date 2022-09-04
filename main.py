@@ -36,7 +36,7 @@ def save_auc_and_loss(train_losses, test_losses, test_aucs, epoch, outfile, outf
     train_losses = train_losses.reshape(-1, 4).mean(axis=1)
     x_train = np.linspace(0, epoch + 1, len(train_losses))
     with open(outfile,'w') as outfmt:
-        for i in range(len(x_test)):
+        for i in range(len(test_losses)):
             outfmt.write(f"{x_test[i]}\t{test_losses[i]}\t{test_aucs[i]}\n")
     with open(outfile_train, 'w') as outfmt:
         for i in range(len(x_train)):
