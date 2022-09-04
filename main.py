@@ -49,7 +49,7 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     train_losses = train_losses.reshape(-1, 4).mean(axis=1)
     x_train = np.linspace(0, epoch + 1, len(train_losses))
     ax1.plot(x_train, train_losses, color='slategrey', linewidth=1, label='Train Loss')
-    if test_losses:
+    if len(test_losses) == 0:
         ax1.plot(x_test, test_losses, color='dodgerblue', marker='o', linewidth=2, label='Test Loss')
     max_ticks = 22
     ax1.set_xticks(np.linspace(0, epoch + 2, max_ticks, dtype=int))
@@ -58,7 +58,7 @@ def plot_auc_and_loss(train_losses, test_losses, test_aucs, epoch, title="AUC an
     ax1.set_xlabel('Epoch')
     ax1.set_yscale('log')
     ax2 = ax1.twinx()
-    if test_aucs:
+    if len(test_aucs) == 0:
         ax2.plot(x_test, test_aucs, color='orange', marker='o', linewidth=2, label='Test AUC')
     ax2.tick_params(axis='y', color='orange', labelcolor='orange')
     ax2.set_yticks(np.linspace(0, 1, 11))
