@@ -189,7 +189,7 @@ if __name__ == '__main__':
         os.path.join(
             "data",
             "dataset",
-            "test_similar.json"
+            "test_dissimilar.json"
         ),
         orient='records',
         dtype=False
