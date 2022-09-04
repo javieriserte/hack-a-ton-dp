@@ -107,7 +107,7 @@ def plot_roc_curve(model, data_loader, device, set='Test'):
 
 # To get the loss we cut the output and target to the length of the sequence, removing the padding.
 # This helps the network to focus on the actual sequence and not the padding.
-def get_loss(sequences, output, criterion) -> torch.Tensor:
+def get_loss(sequences, output, criterion, device) -> torch.Tensor:
     loss = 0.0
     # Cycle through the sequences and accumulate the loss, removing the padding
     for i, seq in enumerate(sequences):
@@ -129,7 +129,7 @@ def train(model, train_loader, optimizer, criterion, device, epoch):
     for batch_idx, (sequences, data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         output = model(data)
-        loss = get_loss(sequences, output, criterion)
+        loss = get_loss(sequences, output, criterion, device)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
@@ -151,7 +151,7 @@ def test(model, test_loader, criterion, device):
         for sequences, data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += get_loss(sequences, output, criterion).cpu()
+            test_loss += get_loss(sequences, output, criterion, device).cpu()
             test_auc += batch_auc(sequences, output) * data.size(0)
     test_loss /= len(test_loader)
     test_auc /= len(test_loader.dataset)
@@ -170,7 +170,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 if __name__ == '__main__':
     use_pssm = True
     n_features = 21 if use_pssm else 1
-    train_epochs = 100
+    train_epochs = 1
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
