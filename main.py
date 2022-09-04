@@ -167,7 +167,7 @@ def predict_one_sequence(model, sequence: Sequence, device):
 if __name__ == '__main__':
     use_pssm = True
     n_features = 21 if use_pssm else 1
-    train_epochs = 4
+    train_epochs = 100
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
