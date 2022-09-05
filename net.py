@@ -12,7 +12,7 @@ class Net(nn.Module):
         )
         self.conv2 = nn.Conv1d(
           self.conv1.out_channels,
-          25,
+          30,
           kernel_size=11,
           stride=1,
           padding=5
