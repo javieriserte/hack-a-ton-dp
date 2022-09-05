@@ -182,8 +182,7 @@ if __name__ == '__main__':
     # torch.backends.cudnn.benchmark = True
     ######
 
-    device = torch.device('cpu')
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
 
     # Load the data
