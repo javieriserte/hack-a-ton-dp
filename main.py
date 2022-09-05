@@ -241,8 +241,9 @@ if __name__ == '__main__':
     test_aucs = []
     seed = int(timeit.default_timer())
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if device.type == "cuda":
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     random.seed(seed)
     torch.backends.cudnn.benchmark = False
@@ -253,7 +254,7 @@ if __name__ == '__main__':
     net = nn.DataParallel(net).to(device)
 
     # Define the loss function and the optimizer
-    criterion = nn.MSELoss(reduction='mean').cuda()
+    criterion = nn.MSELoss(reduction='mean')
 
     # optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     optimizer = optim.Adam(net.parameters(), lr=0.000005)
@@ -294,7 +295,8 @@ if __name__ == '__main__':
     test_aucs.append(auc_test)
     net = None
     gc.collect()
-    torch.cuda.empty_cache()
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
 
     with open("auc_summary.txt", 'a', encoding='utf-8') as f_out:
         for tr, te in zip(train_aucs, test_aucs):
