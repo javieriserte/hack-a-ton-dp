@@ -17,15 +17,15 @@ class Net(nn.Module):
           stride=1,
           padding=5
         )
-        # self.conv3 = nn.Conv1d(
-        #   self.conv2.out_channels,
-        #   20,
-        #   kernel_size=7,
-        #   stride=1,
-        #   padding=3
-        # )
-        self.conv4 = nn.Conv1d(
+        self.conv3 = nn.Conv1d(
           self.conv2.out_channels,
+          20,
+          kernel_size=7,
+          stride=1,
+          padding=3
+        )
+        self.conv4 = nn.Conv1d(
+          self.conv3.out_channels,
           1,
           kernel_size=1,
           stride=1,
@@ -36,7 +36,7 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
-        # x = self.relu(self.conv3(x))
+        x = self.relu(self.conv3(x))
         x = self.sigmoid(self.conv4(x))
         x = x.flatten(start_dim=1)
         return x
