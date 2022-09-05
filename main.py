@@ -111,9 +111,11 @@ def get_loss(sequences, output, criterion, device) -> torch.Tensor:
     loss = 0.0
     # Cycle through the sequences and accumulate the loss, removing the padding
     for i, seq in enumerate(sequences):
+        input = output[i][:len(seq)]
+        target = torch.tensor(seq.clean_target, device=device, dtype=torch.float)
         seq_loss = criterion(
-            output[i][:len(seq)],
-            torch.tensor(seq.clean_target, device=device, dtype=torch.float)
+            input,
+            target
         )
         loss += seq_loss
     # Return the average loss over the sequences of the batch
@@ -177,10 +179,11 @@ if __name__ == '__main__':
 
     # Performance tuning
     torch.multiprocessing.set_sharing_strategy('file_system')
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = True
     ######
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
 
     # Load the data
@@ -224,8 +227,7 @@ if __name__ == '__main__':
         shuffle=True,
         num_workers=2,
         collate_fn=collate_fn,
-        pin_memory=True,
-        pin_memory_device=device.type
+        pin_memory=True
     )
     test_loader = DataLoader(
         test_disorder,
@@ -233,8 +235,7 @@ if __name__ == '__main__':
         shuffle=True,
         num_workers=2,
         collate_fn=collate_fn,
-        pin_memory=True,
-        pin_memory_device=device.type
+        pin_memory=True
     )
 
     train_aucs = []
@@ -251,7 +252,7 @@ if __name__ == '__main__':
 
     # Instantiate the model
     net = Net(in_size=4000, in_features=n_features, out_size=4000).to(device)
-    net = nn.DataParallel(net).to(device)
+    # net = nn.DataParallel(net).to(device)
 
     # Define the loss function and the optimizer
     criterion = nn.MSELoss(reduction='mean')
